@@ -16,14 +16,15 @@ COPY backend/alembic ./alembic
 COPY backend/alembic.ini ./
 COPY --from=frontend /app/frontend/dist /app/frontend/dist
 
-# MANISK_DATABASE_URL must be provided by the deployment platform
-# (PostgreSQL in production). MANISK_SESSION_SECRET and the AI provider
-# vars are injected as secrets — never baked into the image.
+# MANISK_DATABASE_URL is provided by the deployment platform (PostgreSQL
+# in production). MANISK_SESSION_SECRET and the AI provider vars are
+# injected as secrets — never baked into the image.
 ENV MANISK_FRONTEND_DIST=/app/frontend/dist \
     MANISK_STORAGE_DIR=/app/data/files \
     MANISK_COOKIE_SECURE=true
 
 RUN mkdir -p /app/data/files
-EXPOSE 8000
-# Runs Alembic migrations at startup, then serves API + SPA on 0.0.0.0:8000
-CMD ["uvicorn", "mansik.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# Render requires web services to bind to $PORT (default 10000); without
+# it set (docker compose, local runs) the app falls back to port 8000.
+EXPOSE 10000
+CMD uvicorn mansik.main:app --host 0.0.0.0 --port ${PORT:-8000}

@@ -159,7 +159,7 @@ Additional verification scripts (run from the repo root):
 
 ```bash
 .venv/bin/python scripts/e2e_verify.py        # 33-check AI pipeline E2E (stub provider)
-.venv/bin/python scripts/live_check.py        # 32-check live-instance smoke test
+.venv/bin/python scripts/live_check.py https://your-app.onrender.com   # mode-aware deployment verification
 .venv/bin/python scripts/security_audit.py    # 27-check security audit (fresh instance)
 ```
 
@@ -173,7 +173,9 @@ Additional verification scripts (run from the repo root):
   round-trip; confirmation firewall for files.delete (no execution before approval,
   executed after, file gone); conversation/message persistence with execution summaries;
   emergency stop blocking tools mid-chat; API key absent from every response body.
-- **Live instance smoke test (32/32)**: health, SPA serving + client-route fallback,
+- **Live instance verification (mode-aware, 36 checks)** — run
+  `scripts/live_check.py <url>` against any deployment (local, preview, or
+  public HTTPS): health, SPA serving + client-route fallback,
   register/login/logout, session revocation, honest Local Mode status, home summary with
   real counts, personalization round-trip + 422 on invalid style, natural-language task
   creation with verified read-back, memory save, tools catalog, honest integrations

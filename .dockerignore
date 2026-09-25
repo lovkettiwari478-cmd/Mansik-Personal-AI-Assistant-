@@ -1,0 +1,15 @@
+# Build-context hygiene for local Docker builds (Render clones a clean
+# repo, so this mainly protects `docker build` from a dirty workspace).
+.git
+.gitignore
+**/node_modules
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/dist
+runtime-data
+.env
+.env.*
+*.db
+*.db-wal
+*.db-shm

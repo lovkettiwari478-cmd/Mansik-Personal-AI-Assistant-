@@ -2,17 +2,38 @@
 
 ## Option A — Render (one click)
 
-1. Push this repo to GitHub.
-2. In Render: **New → Blueprint**, select the repo (uses [`render.yaml`](../render.yaml)).
-3. Render provisions a **PostgreSQL** database and wires `MANISK_DATABASE_URL` for you.
-4. When prompted, create the secret env vars:
-   - `MANISK_AI_BASE_URL` — your OpenAI-compatible provider (e.g. `https://integrate.api.nvidia.com/v1`)
-   - `MANISK_AI_MODEL` — e.g. `meta/llama-3.1-nemotron-70b-instruct`
-   - `MANISK_AI_API_KEY` — your provider key
-   - `MANISK_SESSION_SECRET` — generated automatically if left empty
-5. Deploy. Health check: `https://<your-app>.onrender.com/api/health`.
+The blueprint ([`render.yaml`](../render.yaml)) provisions a **PostgreSQL 16**
+database (`0.1c-256mb`, Singapore region) and the Docker web service
+(`0.5c-512mb`, Singapore), wires `MANISK_DATABASE_URL` for you, and attaches
+a persistent disk for uploaded files.
 
-Migrations run automatically at startup. HTTPS is automatic; cookies are `Secure`.
+1. **Merge the release PR into `main` first** — Render reads `render.yaml`
+   from the repo's default branch and deploys that branch.
+2. On [render.com](https://render.com) (sign in with GitHub):
+   **New → Blueprint** → select this repository.
+3. Confirm the two resources it will create: `mansik-db` (PostgreSQL) and
+   `mansik` (web service).
+4. When prompted, enter the three secrets:
+   - `MANISK_AI_BASE_URL` — your OpenAI-compatible provider endpoint
+   - `MANISK_AI_MODEL` — the model name
+   - `MANISK_AI_API_KEY` — your provider key
+
+   (`MANISK_SESSION_SECRET` is generated automatically; `MANISK_DATABASE_URL`
+   is wired automatically. Optional: add `MANISK_TAVILY_API_KEY` later in the
+   dashboard for better web search.)
+5. Click **Apply**. The first build takes ~5–10 minutes. Alembic migrations
+   run automatically at startup; the health check is `/api/health`.
+6. Open the service URL (e.g. `https://mansik.onrender.com`). HTTPS and
+   `Secure` cookies are automatic.
+
+Every later push to `main` auto-deploys. Conversations/tasks/memories live
+in PostgreSQL; uploaded files persist on the `mansik-files` disk.
+
+Approximate cost: web `0.5c-512mb` + Postgres `0.1c-256mb` + 1 GB disk
+(roughly $13–14/month total — confirm on
+[render.com/pricing](https://render.com/pricing)). To trial at zero cost you
+can switch the web service to the `free` plan in the dashboard (it sleeps
+after ~15 min idle), but keep the paid database.
 
 ## Option B — Docker (recommended for self-hosting)
 
@@ -106,3 +127,26 @@ schema changes, write a new migration (Alembic batch mode is enabled for SQLite)
 - SQLite: copy `mansik.db` (+ WAL/SHM) and the storage dir while stopped or after
   `VACUUM INTO`.
 - PostgreSQL: standard `pg_dump` + storage dir.
+
+## Verifying a deployment
+
+Run the mode-aware verifier against any live instance (local dev, preview, or
+your public HTTPS deployment):
+
+```bash
+pip install httpx
+python scripts/live_check.py https://your-app.onrender.com
+```
+
+It verifies: health/version, SPA serving, register/logout with server-side
+session revocation, home summary with real counts, personalization, streaming
+chat, tool execution through chat with **verified DB read-back**, memory
+persistence, integrations honesty, permission scopes, the audit trail, and the
+emergency stop (tools genuinely blocked while active). It adapts to Real AI
+mode and Local Mode automatically, and tolerates cold starts. Exits non-zero
+if any check fails.
+
+On your phone (Android/Chrome): open the URL → register → chat
+"remind me to buy milk tomorrow 5pm" → watch the tool card complete with a
+verified result → check the Tasks page → Security → try the emergency stop.
+
