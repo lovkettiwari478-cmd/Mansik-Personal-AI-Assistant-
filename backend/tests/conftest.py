@@ -17,14 +17,33 @@ BACKEND_DIR = os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, BACKEND_DIR)
 
 
+_PG_SERVER = None
+
+
+def _pg_test_uri() -> str:
+    """Per-test database on a real PostgreSQL server (MANISK_TEST_PG=1)."""
+    global _PG_SERVER
+    import pgserver
+    import secrets as _secrets
+    if _PG_SERVER is None:
+        _PG_SERVER = pgserver.get_server("/tmp/pg_mansik_pytest")
+    dbname = "t" + _secrets.token_hex(10)
+    import subprocess
+    _PG_SERVER.psql(f"CREATE DATABASE {dbname};")
+    uri = _PG_SERVER.get_uri(database=dbname)
+    return uri.replace("postgresql://", "postgresql+psycopg2://")
+
+
 def make_client(tmp_path, monkeypatch, **overrides) -> TestClient:
     from mansik.config import get_settings
     from mansik.database import reset_engine
     from mansik.main import create_app
     from mansik.security.rate_limit import limiter
 
+    import os as _os
+    db_url = _pg_test_uri() if _os.environ.get("MANISK_TEST_PG") == "1" else f"sqlite:///{tmp_path}/test.db"
     env = {
-        "MANISK_DATABASE_URL": f"sqlite:///{tmp_path}/test.db",
+        "MANISK_DATABASE_URL": db_url,
         "MANISK_STORAGE_DIR": str(tmp_path / "files"),
         "MANISK_COOKIE_SECURE": "false",
         "MANISK_RATE_LIMIT_ENABLED": "false",

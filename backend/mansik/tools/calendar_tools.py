@@ -70,7 +70,9 @@ class EventCreateTool(Tool):
         )
         ctx.db.add(event)
         ctx.db.flush()
-        result = {"event": _event_json(event)}
+        # verification: re-read the row from the database before claiming success
+        ctx.db.refresh(event)
+        result = {"event": _event_json(event), "verified": True}
         if conflicts:
             result["conflicts"] = [_event_json(c) for c in conflicts[:3]]
             result["note"] = "This event overlaps with existing events (see conflicts)."

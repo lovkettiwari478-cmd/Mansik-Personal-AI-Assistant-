@@ -1,97 +1,84 @@
-/* Login / Register screen. */
+/* Login v2 — cinematic entry: aurora backdrop, glass card,
+ * animated identity orb, honest server state. */
 
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth, useToast } from "../state";
-import { Field, Spinner } from "../components/ui";
+import Orb from "../components/Orb";
 
 export default function LoginPage() {
-  const [mode, setMode] = useState<"login" | "register">("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const { login, register } = useAuth();
   const { push } = useToast();
-  const navigate = useNavigate();
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [form, setForm] = useState({ email: "", password: "", name: "" });
+  const [busy, setBusy] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
     setBusy(true);
     try {
-      if (mode === "login") {
-        await login(email, password);
-      } else {
-        await register(email, password, displayName || email.split("@")[0]);
-      }
-      push(`Welcome${mode === "register" ? " to MANISK" : " back"}!`, "success");
-      navigate("/chat");
+      if (mode === "login") await login(form.email, form.password);
+      else await register(form.email, form.password, form.name || form.email.split("@")[0]);
+      push(mode === "login" ? "Welcome back" : "Account created", "success");
     } catch (err: any) {
-      setError(err.message || "Something went wrong");
+      push(err.message, "error");
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="auth-screen">
-      <div className="auth-card">
-        <div className="auth-head">
-          <div className="brand-logo">M</div>
-          <div className="auth-title">MANISK</div>
-          <div className="auth-sub">Your Personal AI Operating System</div>
+    <div className="login-wrap">
+      <div className="login-card">
+        <div className="login-brand">
+          <Orb state="idle" size={64} />
         </div>
-        <div className="card">
-          <form onSubmit={submit}>
-            {mode === "register" && (
-              <Field label="Display name">
-                <input
-                  className="input" value={displayName} autoComplete="name"
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="How should I call you?" maxLength={120}
-                />
-              </Field>
-            )}
-            <Field label="Email">
+        <h1 className="login-title">MANISK</h1>
+        <p className="login-sub">Your personal AI operating system</p>
+
+        <div className="seg" style={{ width: "100%", marginBottom: 18 }}>
+          <button className={`seg-btn ${mode === "login" ? "active" : ""}`}
+                  onClick={() => setMode("login")}>Sign in</button>
+          <button className={`seg-btn ${mode === "register" ? "active" : ""}`}
+                  onClick={() => setMode("register")}>Create account</button>
+        </div>
+
+        <form onSubmit={submit}>
+          {mode === "register" && (
+            <div className="field">
+              <label>Your name</label>
               <input
-                className="input" type="email" required value={email}
-                autoComplete="email" onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                className="input" required maxLength={120} autoComplete="name"
+                placeholder="What should MANISK call you?"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
-            </Field>
-            <Field label="Password">
-              <input
-                className="input" type="password" required value={password}
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={mode === "register" ? "10+ chars, mixed case or digits" : "••••••••"}
-              />
-            </Field>
-            {error && (
-              <div className="small" style={{ color: "var(--danger)", marginBottom: 10 }} role="alert">
-                {error}
-              </div>
-            )}
-            <button className="btn" style={{ width: "100%" }} disabled={busy}>
-              {busy ? <Spinner /> : mode === "login" ? "Sign in" : "Create account"}
-            </button>
-          </form>
-          <div className="center small mt-14">
-            <span className="muted">
-              {mode === "login" ? "New to MANISK?" : "Already have an account?"}{" "}
-            </span>
-            <a
-              href="#"
-              onClick={(e) => { e.preventDefault(); setMode(mode === "login" ? "register" : "login"); setError(""); }}
-            >
-              {mode === "login" ? "Create an account" : "Sign in"}
-            </a>
+            </div>
+          )}
+          <div className="field">
+            <label>Email</label>
+            <input
+              className="input" type="email" required autoFocus autoComplete="email"
+              placeholder="you@example.com" value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
           </div>
-        </div>
-        <div className="center faint small mt-14">
-          Private by design · your data stays in your account
+          <div className="field">
+            <label>Password</label>
+            <input
+              className="input" type="password" required minLength={10}
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              placeholder={mode === "register" ? "10+ characters" : ""}
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
+          </div>
+          <button className="btn" style={{ width: "100%" }} disabled={busy}>
+            {busy ? <span className="spinner" /> : mode === "login" ? "Sign in" : "Create account"}
+          </button>
+        </form>
+
+        <div className="login-foot">
+          Private by default · sessions revocable · tool actions behind your permission firewall
         </div>
       </div>
     </div>

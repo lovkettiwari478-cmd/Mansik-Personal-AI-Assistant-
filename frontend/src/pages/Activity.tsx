@@ -27,9 +27,9 @@ export default function ActivityPage() {
 
   return (
     <Layout title="Activity" subtitle="Every sensitive action is audited — you can see exactly what happened and when">
-      <div className="row wrap mb-14">
+      <div className="seg mb-14" style={{ overflowX: "auto" }}>
         {CATEGORIES.map((c) => (
-          <button key={c} className={`btn small ${category === c ? "" : "secondary"}`} onClick={() => setCategory(c)}>
+          <button key={c} className={`seg-btn ${category === c ? "active" : ""}`} onClick={() => setCategory(c)}>
             {c}
           </button>
         ))}

@@ -32,18 +32,28 @@ _TIME_HINT_RE = re.compile(
 
 
 def _extract_due(text: str) -> str | None:
+    """Extract the due phrase. When a day/time word ("tomorrow", "next
+    monday", "in 2 hours"…) appears EARLIER than a "due/by/at …" clause,
+    prefer it — "buy milk tomorrow at 5pm" should yield the full
+    "tomorrow at 5pm", not just "5pm" with "tomorrow" left in the title."""
+    candidates: list[tuple[int, str]] = []
     m = _DUE_RE.search(text)
     if m:
         due = m.group(1).strip()
         if due and len(due) < 80:
-            return due
-    m = _TIME_HINT_RE.search(text)
-    if m:
-        # take everything from the first time hint to the end of the phrase
-        due = text[m.start():].strip().rstrip(".,!?")
+            candidates.append((m.start(1), due))
+    h = _TIME_HINT_RE.search(text)
+    if h:
+        tail = text[h.start():]
+        stop = re.search(r"($|;|,| and | with | priority)", tail, re.IGNORECASE)
+        due = tail[: stop.start()].strip().rstrip(".,!?") if stop else tail.strip()
+        # drop a trailing priority word captured before the terminator
+        due = re.sub(r"\s+(?:urgent|high|medium|low)\s*$", "", due, flags=re.IGNORECASE)
         if due and len(due) < 80:
-            return due
-    return None
+            candidates.append((h.start(), due))
+    if not candidates:
+        return None
+    return min(candidates, key=lambda c: c[0])[1]
 
 
 def _extract_priority(text: str) -> str:
@@ -163,6 +173,16 @@ def route_local(message: str) -> LocalPlan:
             intent="web.search",
         )
 
+    # --- web fetch (external → firewall confirmation; SSRF-guarded tool) --------------------------
+    m = re.match(r"^(?:fetch|open|read)\s+(?:the\s+)?(?:url\s+)?(https?://\S+)$", low)
+    if m:
+        url = m.group(1).strip()
+        return LocalPlan(
+            tool_calls=[{"tool": "web.fetch", "params": {"url": url},
+                         "reason": "user asked to fetch a URL"}],
+            intent="web.fetch",
+        )
+
     # --- files ------------------------------------------------------------------------------------
     if low in ("list files", "my files", "show files", "files"):
         return LocalPlan(tool_calls=[{"tool": "files.list", "params": {}}], intent="files.list")
@@ -176,9 +196,9 @@ def _task_plan(raw: str, remind: bool = False) -> LocalPlan:
     due = _extract_due(raw)
     title = raw
     if due:
-        # strip the due phrase from the title (rough but deterministic)
-        title = _DUE_RE.sub(" ", raw)
-        title = re.sub(re.escape(due), " ", title, flags=re.IGNORECASE)
+        # strip the due phrase from the title (rough but deterministic);
+        # remove the full phrase FIRST so it still matches verbatim
+        title = re.sub(re.escape(due), " ", raw, flags=re.IGNORECASE)
         title = re.sub(r"\b(?:due|by|at|on|before)\b", " ", title, flags=re.IGNORECASE)
     title = re.sub(r"\bwith\b", " ", title, flags=re.IGNORECASE)
     title = re.sub(r"\b(?:high|medium|low|urgent)\s+priority\b|\bpriority\b", " ", title, flags=re.IGNORECASE)

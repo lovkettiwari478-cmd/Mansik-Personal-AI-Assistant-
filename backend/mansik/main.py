@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI):
         start_scheduler(settings.scheduler_interval_seconds)
     yield
     from .workers.scheduler import stop_scheduler
-    stop_scheduler
+    stop_scheduler()
     log(logger, "info", "MANISK stopped")
 
 
@@ -75,7 +75,7 @@ def create_app() -> FastAPI:
 
     from .api import (
         activity, auth, automations, calendar, chat, conversations, files,
-        memories, security, settings as settings_api, status, tasks,
+        home, memories, security, settings as settings_api, status, tasks,
     )
     app.include_router(status.router)
     app.include_router(auth.router)
@@ -89,6 +89,7 @@ def create_app() -> FastAPI:
     app.include_router(activity.router)
     app.include_router(security.router)
     app.include_router(settings_api.router)
+    app.include_router(home.router)
 
     @app.get("/api/ready")
     def ready():

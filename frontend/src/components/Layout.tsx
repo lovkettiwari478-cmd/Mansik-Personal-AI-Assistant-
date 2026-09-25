@@ -1,25 +1,26 @@
-/* App shell: sidebar (desktop), drawer + bottom nav (mobile), topbar. */
+/* App shell v2: glass sidebar (desktop), drawer + bottom nav (mobile). */
 
 import React, { useState } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth, useNotifications, useStatus } from "../state";
 import { Badge } from "./ui";
+import Orb from "./Orb";
 
 const NAV_MAIN = [
-  { to: "/chat", label: "Chat", icon: "💬" },
-  { to: "/", label: "Dashboard", icon: "🏠", exact: true },
+  { to: "/", label: "Home", icon: "◈", exact: true },
+  { to: "/chat", label: "Chat", icon: "❖" },
 ];
 const NAV_WORK = [
   { to: "/tasks", label: "Tasks", icon: "✓" },
-  { to: "/calendar", label: "Calendar", icon: "📅" },
-  { to: "/memory", label: "Memory", icon: "🧠" },
+  { to: "/calendar", label: "Calendar", icon: "▤" },
+  { to: "/memory", label: "Memory", icon: "◉" },
   { to: "/automations", label: "Automations", icon: "⚡" },
-  { to: "/files", label: "Files", icon: "📁" },
+  { to: "/files", label: "Files", icon: "▦" },
 ];
 const NAV_SYSTEM = [
-  { to: "/activity", label: "Activity", icon: "🗒" },
-  { to: "/security", label: "Security", icon: "🛡" },
-  { to: "/integrations", label: "Integrations", icon: "🔌" },
+  { to: "/activity", label: "Activity", icon: "≡" },
+  { to: "/security", label: "Security", icon: "⛨" },
+  { to: "/integrations", label: "Integrations", icon: "⬡" },
   { to: "/settings", label: "Settings", icon: "⚙" },
 ];
 
@@ -27,21 +28,27 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
   const { unread } = useNotifications();
   return (
     <>
-      <div className="nav-section">Main</div>
+      <div className="nav-section">Command</div>
       {NAV_MAIN.map((n) => (
-        <NavLink key={n.to} to={n.to} end={n.exact} className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`} onClick={onNavigate}>
+        <NavLink key={n.to} to={n.to} end={n.exact}
+                 className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+                 onClick={onNavigate}>
           <span className="nav-icon" aria-hidden>{n.icon}</span> {n.label}
         </NavLink>
       ))}
       <div className="nav-section">Workspace</div>
       {NAV_WORK.map((n) => (
-        <NavLink key={n.to} to={n.to} className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`} onClick={onNavigate}>
+        <NavLink key={n.to} to={n.to}
+                 className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+                 onClick={onNavigate}>
           <span className="nav-icon" aria-hidden>{n.icon}</span> {n.label}
         </NavLink>
       ))}
       <div className="nav-section">System</div>
       {NAV_SYSTEM.map((n) => (
-        <NavLink key={n.to} to={n.to} className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`} onClick={onNavigate}>
+        <NavLink key={n.to} to={n.to}
+                 className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
+                 onClick={onNavigate}>
           <span className="nav-icon" aria-hidden>{n.icon}</span> {n.label}
           {n.to === "/security" && unread > 0 && <span className="nav-badge">{unread}</span>}
         </NavLink>
@@ -57,7 +64,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <aside className="sidebar" aria-label="Main navigation">
       <div className="brand">
-        <div className="brand-logo">M</div>
+        <div className="brand-mark">M</div>
         <div>
           <div className="brand-name">MANISK</div>
           <div className="brand-sub">Personal AI OS</div>
@@ -65,8 +72,8 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </div>
       <NavItems onNavigate={onNavigate} />
       <div className="sidebar-footer">
-        <div className="row between mb-8">
-          <div className="small muted" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+        <div className="row between mb-8" style={{ paddingLeft: 10 }}>
+          <div className="small muted" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {user?.display_name}
           </div>
           <Badge kind={aiConfigured ? "success" : "warning"}>{aiConfigured ? "AI" : "Local"}</Badge>
@@ -84,11 +91,11 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 const MOBILE_NAV = [
-  { to: "/chat", label: "Chat", icon: "💬" },
-  { to: "/", label: "Home", icon: "🏠", exact: true },
+  { to: "/", label: "Home", icon: "◈", exact: true },
+  { to: "/chat", label: "Chat", icon: "❖" },
   { to: "/tasks", label: "Tasks", icon: "✓" },
-  { to: "/memory", label: "Memory", icon: "🧠" },
-  { to: "/security", label: "Security", icon: "🛡" },
+  { to: "/memory", label: "Memory", icon: "◉" },
+  { to: "/security", label: "Security", icon: "⛨" },
 ];
 
 export default function Layout({ children, title, subtitle, fullscreen }: {
@@ -98,8 +105,6 @@ export default function Layout({ children, title, subtitle, fullscreen }: {
   fullscreen?: boolean;
 }) {
   const [drawer, setDrawer] = useState(false);
-  const location = useLocation();
-  const { unread } = useNotifications();
   const { aiConfigured, aiModel } = useStatus();
 
   return (
@@ -113,19 +118,22 @@ export default function Layout({ children, title, subtitle, fullscreen }: {
       <div className="main">
         <div className="mobile-top">
           <button className="btn ghost small" onClick={() => setDrawer(true)} aria-label="Open menu">☰</button>
-          <div style={{ fontWeight: 700 }}>MANISK</div>
-          <Badge kind={aiConfigured ? "success" : "warning"}>{aiConfigured ? "AI" : "Local"}</Badge>
+          <div className="row" style={{ gap: 8 }}>
+            <Orb state="idle" size={20} />
+            <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, letterSpacing: "0.05em" }}>MANISK</span>
+          </div>
+          <button className="btn ghost small" onClick={() => setDrawer(true)} aria-label="More">⋯</button>
         </div>
         <div className="topbar">
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div className="topbar-title">{title}</div>
             {subtitle && <div className="topbar-sub">{subtitle}</div>}
           </div>
           <div style={{ marginLeft: "auto" }} className="row">
-            {location.pathname.startsWith("/chat") ? null : (
-              unread > 0 && <Badge kind="accent">{unread} new</Badge>
+            {aiConfigured && aiModel && (
+              <span className="faint small mono" title="Active AI model">{aiModel}</span>
             )}
-            {aiConfigured && aiModel && <span className="faint small mono" title="Active AI model">{aiModel}</span>}
+            <Orb state={aiConfigured ? "idle" : "idle"} size={26} />
           </div>
         </div>
         {fullscreen ? (
@@ -135,12 +143,8 @@ export default function Layout({ children, title, subtitle, fullscreen }: {
         )}
         <nav className="bottom-nav" aria-label="Quick navigation">
           {MOBILE_NAV.map((n) => (
-            <NavLink
-              key={n.to}
-              to={n.to}
-              end={n.exact}
-              className={({ isActive }) => `bottom-nav-item ${isActive ? "active" : ""}`}
-            >
+            <NavLink key={n.to} to={n.to} end={n.exact}
+                     className={({ isActive }) => `bottom-nav-item ${isActive ? "active" : ""}`}>
               <span aria-hidden>{n.icon}</span>
               {n.label}
             </NavLink>

@@ -13,3 +13,5 @@ python-multipart>=0.0.9
 # dev/test
 pytest>=8.0
 pytest-asyncio>=0.23
+# PostgreSQL driver (production deployments use MANISK_DATABASE_URL=postgresql+psycopg2://...)
+psycopg2-binary>=2.9

@@ -2,12 +2,15 @@
 
 MANISK is a personal AI operating system: conversational AI, long-term memory, tasks,
 calendar, files, tools, automations — wrapped in a **permission firewall** that keeps
-*you* in control of every sensitive action.
+*you* in control of every sensitive action — with a **futuristic, mobile-first premium UI**
+(designed for Android browsers first).
 
-> **Status: v0.1.0 — working, tested, deployable.**
-> 108 backend tests passing. Live deployment verified end-to-end (see *Verification* below).
-> AI conversation requires a model provider credential (any OpenAI-compatible API) —
-> without one, MANISK runs in **honest Local Mode** (deterministic command routing, no fake AI).
+> **Status: v0.2.0 — working, tested, deployable.**
+> 113 backend tests passing on SQLite **and** PostgreSQL. AI pipeline verified end-to-end
+> against an OpenAI-compatible provider (33/33 checks, see *Verification*). Second security
+> audit: 27/27 automated checks passed. AI conversation requires a model provider
+> credential (any OpenAI-compatible API, configured via server env vars only) — without
+> one, MANISK runs in **honest Local Mode** (deterministic command routing, no fake AI).
 
 ---
 
@@ -41,9 +44,14 @@ calendar, files, tools, automations — wrapped in a **permission firewall** tha
 - **Web search / URL fetch** are real integrations (Tavily API + keyless DuckDuckGo
   fallback; SSRF-hardened fetcher). This repository's preview sandbox blocks outbound
   internet, so they return honest network errors *here*. On a normal host they work.
+- **AI pipeline verification in this sandbox** used a local OpenAI-compatible test double
+  (`scripts/ai_stub_server.py`) because the sandbox blocks external providers. The
+  protocol is identical to a real provider (streaming `/v1/chat/completions`); you supply
+  the real provider at deployment.
 - **Biometric "Face Lock" / hardware key recovery** are not implemented — real
   biometrics need platform APIs (WebAuthn is the planned path); we do not fake them.
-- **Semantic/vector memory** is an extension point; today search is full-text (FTS5).
+- **Semantic/vector memory** is an extension point; today search is full-text (FTS5 on
+  SQLite, term-OR ILIKE on PostgreSQL).
 
 ---
 
@@ -101,17 +109,19 @@ Database: `sqlite:///./mansik.db` by default.
 
 ## Production
 
+Quick local build (no Docker):
+
 ```bash
 cp .env.example .env          # fill in secrets
 cd frontend && npm ci && npm run build && cd ..
 cd backend && pip install -r requirements.txt
 export MANISK_FRONTEND_DIST=$(pwd)/../frontend/dist
-export MANISK_DATABASE_URL=postgresql+psycopg2://user:pass@host/mansik   # optional
+export MANISK_DATABASE_URL=postgresql+psycopg2://user:pass@host/mansik
 uvicorn mansik.main:app --host 0.0.0.0 --port 8000
 ```
 
-Docker: `docker compose -f deploy/docker-compose.yml up -d --build`
-(put HTTPS in front with your reverse proxy of choice; cookies are `Secure` by default).
+Prefer Docker or Render (see the Production section at the bottom) — both include
+PostgreSQL, and cookies are `Secure` by default (terminate TLS in front).
 
 ## Enabling AI conversation
 
@@ -133,34 +143,65 @@ never in logs, never in API responses (tested).
 
 ```bash
 cd backend
-.venv/bin/python -m pytest tests/ -q        # 108 tests
+.venv/bin/python -m pytest tests/ -q                # 113 tests (SQLite)
+MANISK_TEST_PG=1 .venv/bin/python -m pytest tests/ -q   # same suite on real PostgreSQL
 ```
 
 Covers: auth (success/failure), CSRF, IDOR/user isolation, rate limiting, secret
 leakage, SQL/prompt-injection attempts, memory CRUD + FTS, tasks, calendar + conflict
 detection, tool validation + SSRF protection, permission firewall (confirmations,
 grants, emergency stop), automations (grant gating, scheduler, skip rules), files
-(validation, isolation), chat flows (Local Mode), and the full AI orchestration loop
-against a local test-double provider server.
+(validation, isolation), chat flows (Local Mode), the full AI orchestration loop
+against a local test-double provider server, v0.2 personalization, home summary,
+tool event labels/agents, read-back verification, and abort persistence.
+
+Additional verification scripts (run from the repo root):
+
+```bash
+.venv/bin/python scripts/e2e_verify.py        # 33-check AI pipeline E2E (stub provider)
+.venv/bin/python scripts/live_check.py        # 32-check live-instance smoke test
+.venv/bin/python scripts/security_audit.py    # 27-check security audit (fresh instance)
+```
 
 ## Verification (what was actually tested end-to-end)
 
-- 108 automated tests, all passing.
-- Live production server (this repo's preview): register/login/logout, CSRF rejection,
-  unauthenticated 401s, chat SSE streaming with tool events, task creation via natural
-  language ("create task … due tomorrow 5pm"), memory save + FTS recall, calculator,
-  confirmation flow for web search (approve → honest network-restricted error),
-  file upload/download/type-rejection, emergency stop on/off, automation grant→create→enable,
-  audit trail, security headers, database persistence across server restarts, and
-  cross-user IDOR checks (all 404/401, zero data leakage).
+- 113 automated tests passing on SQLite **and** PostgreSQL 16.
+- **AI pipeline E2E (33/33)** with the real backend over real HTTP/SSE and a local
+  OpenAI-compatible test double: provider configured via env only; plain-text and JSON
+  streaming; tool-call round-trip (tasks.create through the permission firewall with
+  `label`/`agent`/`verified` events, REST read-back of the created task); memory.save
+  round-trip; confirmation firewall for files.delete (no execution before approval,
+  executed after, file gone); conversation/message persistence with execution summaries;
+  emergency stop blocking tools mid-chat; API key absent from every response body.
+- **Live instance smoke test (32/32)**: health, SPA serving + client-route fallback,
+  register/login/logout, session revocation, honest Local Mode status, home summary with
+  real counts, personalization round-trip + 422 on invalid style, natural-language task
+  creation with verified read-back, memory save, tools catalog, honest integrations
+  ("not connected" + required env vars), permissions, audit trail, emergency stop
+  on/off, unauthenticated 401s.
+- **Security audit (27/27)** — see [docs/SECURITY.md](docs/SECURITY.md) for scope.
+- **Bugs found and fixed by this verification** (documented, not hidden): the AI mode
+  orchestrator was not sending the current user message to the model; the `verified`
+  flag was not fed back to the model; "buy milk tomorrow at 5pm" left "tomorrow" in the
+  task title and used today's date; the shutdown lifespan referenced `stop_scheduler`
+  without calling it.
+
+## Production
+
+One-click Render blueprint: [`render.yaml`](render.yaml) (PostgreSQL + secrets wired;
+set `MANISK_AI_*` in the dashboard when prompted). Docker Compose:
+`docker compose -f deploy/docker-compose.yml up -d --build` (PostgreSQL included).
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Repository layout
 
 ```
 backend/    FastAPI app (mansik/), Alembic migrations, tests/
-frontend/   React + Vite + TypeScript SPA
-deploy/     Dockerfile, docker-compose.yml
+frontend/   React + Vite + TypeScript SPA (design system v2)
+deploy/     Dockerfile, docker-compose.yml (PostgreSQL)
+scripts/    E2E + live + security-audit verification scripts, AI test double
 docs/       architecture, security, deployment, API docs
+render.yaml one-click Render blueprint (web + PostgreSQL)
 .env.example  all environment variables, documented
 ```
 

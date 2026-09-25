@@ -1,9 +1,10 @@
-/* Settings page — profile, timezone, theme, password change, data controls. */
+/* Settings v2 — personalization: assistant name, response style,
+ * timezone, memory; password; account info. */
 
 import { useEffect, useState } from "react";
 import { authApi, settingsApi } from "../api";
 import { useAuth, useToast } from "../state";
-import { Field, Loading } from "../components/ui";
+import { Field, Loading, Toggle } from "../components/ui";
 import Layout from "../components/Layout";
 
 const TIMEZONES = [
@@ -13,8 +14,14 @@ const TIMEZONES = [
   "Australia/Sydney", "Africa/Cairo", "Africa/Lagos",
 ];
 
+const STYLES = [
+  { key: "concise", label: "Concise", hint: "Short, direct answers" },
+  { key: "balanced", label: "Balanced", hint: "Clear and complete" },
+  { key: "detailed", label: "Detailed", hint: "Thorough and structured" },
+];
+
 export default function SettingsPage() {
-  const { user, refresh } = useAuth();
+  const { user } = useAuth();
   const { push } = useToast();
   const [settings, setSettings] = useState<any>(null);
   const [displayName, setDisplayName] = useState("");
@@ -37,10 +44,11 @@ export default function SettingsPage() {
       await settingsApi.patch({
         display_name: displayName,
         timezone: settings.timezone,
-        theme: settings.theme,
+        assistant_name: settings.assistant_name,
+        response_style: settings.response_style,
+        memory_enabled: settings.memory_enabled,
       });
       push("Settings saved", "success");
-      refresh();
     } catch (e: any) { push(e.message, "error"); }
     finally { setBusy(false); }
   };
@@ -57,15 +65,38 @@ export default function SettingsPage() {
   };
 
   return (
-    <Layout title="Settings" subtitle="Profile, preferences and account security">
+    <Layout title="Settings" subtitle="Personalization · preferences · account">
+      {/* personalization */}
       <div className="card">
-        <div className="card-title">Profile</div>
-        <Field label="Display name">
-          <input className="input" value={displayName} maxLength={120}
-                 onChange={(e) => setDisplayName(e.target.value)} />
-        </Field>
-        <Field label="Email (read-only)">
-          <input className="input" value={user?.email || ""} disabled />
+        <div className="card-title">Personalization</div>
+        <div className="card-sub">Make MANISK yours — the assistant's name and how it responds.</div>
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          <Field label="Assistant name">
+            <input
+              className="input" value={settings.assistant_name} maxLength={40}
+              onChange={(e) => setSettings({ ...settings, assistant_name: e.target.value })}
+              placeholder="MANISK"
+            />
+          </Field>
+          <Field label="Your name">
+            <input className="input" value={displayName} maxLength={120}
+                   onChange={(e) => setDisplayName(e.target.value)} />
+          </Field>
+        </div>
+        <Field label="Response style">
+          <div className="seg" style={{ width: "100%" }}>
+            {STYLES.map((s) => (
+              <button key={s.key} className={`seg-btn ${settings.response_style === s.key ? "active" : ""}`}
+                      style={{ flex: 1 }}
+                      onClick={() => setSettings({ ...settings, response_style: s.key })}
+                      title={s.hint}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+          <div className="small faint" style={{ marginTop: 6 }}>
+            {STYLES.find((s) => s.key === settings.response_style)?.hint}
+          </div>
         </Field>
         <Field label="Timezone">
           <select
@@ -75,36 +106,57 @@ export default function SettingsPage() {
             {TIMEZONES.map((tz) => <option key={tz}>{tz}</option>)}
           </select>
         </Field>
-        <button className="btn" disabled={busy} onClick={saveProfile}>Save profile</button>
+        <Toggle
+          on={settings.memory_enabled}
+          onChange={(v) => setSettings({ ...settings, memory_enabled: v })}
+          label="Long-term memory"
+          description="MANISK stores and retrieves facts you share (manage in Memory)."
+        />
+        <button className="btn mt-14" disabled={busy} onClick={saveProfile}>Save settings</button>
       </div>
 
-      <div className="card">
+      {/* password */}
+      <div className="card mt-14">
         <div className="card-title">Change password</div>
         <div className="card-sub">Changing your password signs out all other devices.</div>
-        <Field label="Current password">
-          <input className="input" type="password" value={pw.current} autoComplete="current-password"
-                 onChange={(e) => setPw({ ...pw, current: e.target.value })} />
-        </Field>
-        <Field label="New password (10+ chars, mixed case or digits)">
-          <input className="input" type="password" value={pw.next} autoComplete="new-password"
-                 onChange={(e) => setPw({ ...pw, next: e.target.value })} />
-        </Field>
-        <Field label="Confirm new password">
-          <input className="input" type="password" value={pw.confirm} autoComplete="new-password"
-                 onChange={(e) => setPw({ ...pw, confirm: e.target.value })} />
-        </Field>
+        <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+          <div className="field">
+            <label>Current</label>
+            <input className="input" type="password" value={pw.current} autoComplete="current-password"
+                   onChange={(e) => setPw({ ...pw, current: e.target.value })} />
+          </div>
+          <div className="field">
+            <label>New (10+ chars)</label>
+            <input className="input" type="password" value={pw.next} autoComplete="new-password"
+                   onChange={(e) => setPw({ ...pw, next: e.target.value })} />
+          </div>
+          <div className="field">
+            <label>Confirm new</label>
+            <input className="input" type="password" value={pw.confirm} autoComplete="new-password"
+                   onChange={(e) => setPw({ ...pw, confirm: e.target.value })} />
+          </div>
+        </div>
         <button className="btn" disabled={busy || !pw.current || !pw.next} onClick={changePassword}>
           Change password
         </button>
       </div>
 
-      <div className="card">
-        <div className="card-title">About</div>
+      {/* account */}
+      <div className="card mt-14">
+        <div className="card-title">Account</div>
         <div className="small muted">
-          MANISK · Personal AI Operating System · v0.1.0<br />
-          Conversational AI · personal memory · planning · tools · permission firewall · automations.<br />
-          Your data (conversations, memories, tasks, files) is isolated to your account and never
-          shared. Secrets and API keys are kept server-side only.
+          <div className="row between mb-8">
+            <span className="faint">Email</span><span>{user?.email}</span>
+          </div>
+          <div className="row between mb-8">
+            <span className="faint">Member since</span>
+            <span>{new Date(user?.created_at || "").toLocaleDateString()}</span>
+          </div>
+        </div>
+        <div className="small faint mt-14">
+          MANISK · Personal AI Operating System · v0.2.0<br />
+          Your data (conversations, memories, tasks, files) is isolated to your account.
+          Secrets and API keys are kept server-side only.
         </div>
       </div>
     </Layout>

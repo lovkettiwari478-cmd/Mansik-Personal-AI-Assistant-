@@ -99,3 +99,33 @@ in AI mode — never silently.
 108 automated tests and live probes. Not yet done: external penetration testing,
 WebAuthn/2FA, per-IP lockout persistence across workers (Redis), audit log tamper
 resistance (append-only store), and encryption at rest beyond the OS level.
+
+---
+
+## Second security audit (v0.2.0)
+
+Automated audit: `scripts/security_audit.py` spins up a fresh isolated instance and
+runs **27 checks over real HTTP — all passed**:
+
+| Area | Checks | Result |
+|---|---|---|
+| Auth | unauthenticated requests to 12 API routes | all 401 |
+| IDOR | cross-user task/memory/file listing + deletes, chat into foreign conversation | isolated; foreign IDs → 404 (no existence leak) |
+| CSRF | POST without `X-CSRF-Token` | 403 |
+| Sessions | logout revokes server-side | old cookie → 401 |
+| SQLi | stored + searched `'; DROP TABLE` payloads | safe (parameterized), table intact |
+| SSRF | `web.fetch` of `169.254.169.254` and `127.0.0.1` — gated by confirmation **and** blocked even after approval; `file://` never reaches the fetcher | blocked by DNS-resolving guard |
+| Rate limits | 8 rapid failed logins | throttled (429) after the configured limit |
+| Headers | CSP, X-Frame-Options, nosniff, Referrer-Policy | present |
+| File access | `../../etc/evil.txt` upload sanitized to bare filename; `.sh` upload rejected; cross-user file delete → 404 | safe |
+| Secrets | session secret / provider key in `/api/status` + `/api/integrations` | absent |
+| XSS | `<img onerror>` payload stored as text, no server HTML rendering | safe |
+
+In addition, the 113-test suite covers prompt-injection structure (tool output is
+untrusted data; the firewall gates tools regardless of model output), secret redaction
+in logs, calculator AST whitelisting, memory credential-refusal, and the AI-pipeline
+E2E asserts the provider API key never appears in any response body (33/33).
+
+Not covered by this audit (unchanged from v0.1.0): external penetration testing,
+WebAuthn/2FA, Redis-backed distributed rate limiting, append-only audit storage,
+encryption at rest beyond the OS level.

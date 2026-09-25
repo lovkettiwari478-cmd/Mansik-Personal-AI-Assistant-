@@ -66,7 +66,9 @@ class TaskCreateTool(Tool):
         )
         ctx.db.add(task)
         ctx.db.flush()
-        return {"task": _task_json(task)}
+        # verification: re-read the row from the database before claiming success
+        ctx.db.refresh(task)
+        return {"task": _task_json(task), "verified": True}
 
 
 class TaskListTool(Tool):

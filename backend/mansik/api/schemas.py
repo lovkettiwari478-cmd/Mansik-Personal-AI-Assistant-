@@ -150,6 +150,8 @@ class SettingsPatch(StrictModel):
     timezone: str | None = Field(None, max_length=64)
     theme: Literal["dark", "light"] | None = None
     memory_enabled: bool | None = None
+    assistant_name: str | None = Field(None, min_length=1, max_length=40)
+    response_style: Literal["concise", "balanced", "detailed"] | None = None
 
 
 # --- security ---------------------------------------------------------------------

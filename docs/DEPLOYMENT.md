@@ -1,32 +1,37 @@
 # MANISK Deployment
 
-## Option A — Docker (recommended)
+## Option A — Render (one click)
+
+1. Push this repo to GitHub.
+2. In Render: **New → Blueprint**, select the repo (uses [`render.yaml`](../render.yaml)).
+3. Render provisions a **PostgreSQL** database and wires `MANISK_DATABASE_URL` for you.
+4. When prompted, create the secret env vars:
+   - `MANISK_AI_BASE_URL` — your OpenAI-compatible provider (e.g. `https://integrate.api.nvidia.com/v1`)
+   - `MANISK_AI_MODEL` — e.g. `meta/llama-3.1-nemotron-70b-instruct`
+   - `MANISK_AI_API_KEY` — your provider key
+   - `MANISK_SESSION_SECRET` — generated automatically if left empty
+5. Deploy. Health check: `https://<your-app>.onrender.com/api/health`.
+
+Migrations run automatically at startup. HTTPS is automatic; cookies are `Secure`.
+
+## Option B — Docker (recommended for self-hosting)
 
 ```bash
-cp .env.example .env       # edit: session secret, AI provider, etc.
+cp .env.example .env       # edit: session secret, AI provider, POSTGRES_PASSWORD
 docker compose -f deploy/docker-compose.yml up -d --build
 # health check
 curl http://localhost:8000/api/health
 ```
 
-The image builds the frontend, installs backend deps, runs Alembic migrations at
-startup and serves API + SPA on `:8000`. Data persists in the `mansik_data` volume
-(SQLite at `/app/data/mansik.db`, files at `/app/data/files`).
+The image builds the frontend, installs backend deps (incl. `psycopg2-binary`), runs
+Alembic migrations at startup and serves API + SPA on `:8000`. Compose includes a
+**PostgreSQL 16** database; `MANISK_DATABASE_URL` is wired to it automatically.
+Files persist in the `mansik_data` volume.
 
-Put HTTPS in front (Caddy/Traefik/nginx/Cloudflare). Cookies are `Secure` by default,
-so HTTPS is required for login to work from browsers.
+Put HTTPS in front (Caddy/Traefik/nginx/Cloudflare) if exposed directly. Cookies are
+`Secure` by default, so HTTPS is required for login to work from browsers.
 
-### PostgreSQL
-
-Uncomment the `db` service in `deploy/docker-compose.yml` and set:
-
-```
-MANISK_DATABASE_URL=postgresql+psycopg2://mansik:CHANGE_ME@db:5432/mansik
-```
-
-Add `psycopg2-binary` to `backend/requirements.txt`. Migrations run automatically.
-
-## Option B — Bare metal / VM
+## Option C — Bare metal / VM
 
 ```bash
 # frontend
@@ -37,6 +42,9 @@ export $(grep -v '^#' ../.env | xargs)     # or use a process manager
 export MANISK_FRONTEND_DIST=/srv/mansik/frontend/dist
 .venv/bin/uvicorn mansik.main:app --host 0.0.0.0 --port 8000 --workers 1
 ```
+
+Use PostgreSQL in production (`MANISK_DATABASE_URL=postgresql+psycopg2://…`);
+SQLite is fine for single-user local instances only.
 
 Systemd unit sketch:
 

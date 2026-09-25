@@ -26,9 +26,13 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    if os.environ.get("MANISK_DATABASE_URL"):
-        return os.environ["MANISK_DATABASE_URL"]
-    return get_settings().database_url
+    url = os.environ.get("MANISK_DATABASE_URL") or get_settings().database_url
+    # Normalize provider-injected URLs (Render/Heroku use postgres://)
+    if url.startswith("postgres://"):
+        url = "postgresql+psycopg2://" + url[len("postgres://"):]
+    elif url.startswith("postgresql://"):
+        url = "postgresql+psycopg2://" + url[len("postgresql://"):]
+    return url
 
 
 def run_migrations_offline() -> None:

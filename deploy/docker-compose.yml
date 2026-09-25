@@ -1,6 +1,26 @@
-# MANISK — production compose file.
-# Usage: cp .env.example .env (fill in) && docker compose -f deploy/docker-compose.yml up -d --build
+# MANISK — production compose file (API + built SPA + PostgreSQL).
+# SQLite is fine for a single-user local instance, but production uses
+# PostgreSQL (versioned Alembic migrations run automatically at startup).
+#
+# Usage:
+#   cp .env.example .env   (fill in secrets — never commit .env)
+#   docker compose -f deploy/docker-compose.yml up -d --build
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: mansik
+      POSTGRES_USER: mansik
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mansik -d mansik"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   mansik:
     build:
       context: ..
@@ -10,11 +30,13 @@ services:
     env_file:
       - ../.env
     environment:
-      # Override file paths for the container volume
-      MANISK_DATABASE_URL: sqlite:////app/data/mansik.db
+      MANISK_DATABASE_URL: postgresql+psycopg2://mansik:${POSTGRES_PASSWORD}@db:5432/mansik
       MANISK_STORAGE_DIR: /app/data/files
     volumes:
       - mansik_data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
@@ -22,16 +44,6 @@ services:
       timeout: 5s
       retries: 3
 
-  # Optional: PostgreSQL instead of SQLite (set MANISK_DATABASE_URL accordingly)
-  # db:
-  #   image: postgres:16-alpine
-  #   environment:
-  #     POSTGRES_DB: mansik
-  #     POSTGRES_USER: mansik
-  #     POSTGRES_PASSWORD: change-me
-  #   volumes:
-  #     - pgdata:/var/lib/postgresql/data
-  #   restart: unless-stopped
-
 volumes:
+  pgdata:
   mansik_data:

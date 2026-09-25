@@ -16,6 +16,7 @@ Design invariants:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from datetime import datetime
@@ -29,6 +30,7 @@ from ..models import Conversation, Message, User, UserSettings, new_id, utcnow
 from ..observability import execution_id_var, get_logger, log
 from ..permissions.firewall import PermissionFirewall
 from ..tools import ToolContext, execute_tool, registry as tool_registry
+from ..tools.labels import agent_for, label_for
 from .context import build_context_block, recent_messages
 from .local_router import route_local
 from .prompt import build_system_prompt, tools_description
@@ -136,7 +138,7 @@ class Orchestrator:
         self.db.add(user_message)
         if conversation.title == "New conversation":
             conversation.title = text.strip()[:60] or "Conversation"
-        self.db.flush()
+        self.db.commit()  # abort-safe: user message survives a cancelled stream
 
         # 2) context engine
         context_block, memories = build_context_block(self.db, user, user_settings, text)
@@ -148,6 +150,11 @@ class Orchestrator:
         tool_events: list[dict] = []
         confirmation_box: dict = {}  # mutable so inner callbacks can populate it
         text_streamed = False  # AI mode streams deltas inline; local mode emits once
+        streamed_text = ""    # for abort-safe partial persistence
+
+        def _track_delta(chunk: str) -> None:
+            nonlocal streamed_text
+            streamed_text += chunk
 
         try:
             if ai_mode:
@@ -165,6 +172,8 @@ class Orchestrator:
                         confirmation_box.update(event)
                         yield event
                     else:
+                        if event["event"] == "delta":
+                            _track_delta(event.get("text", ""))
                         yield event
                 if confirmation_box and final_text is None:
                     final_text = (
@@ -199,8 +208,26 @@ class Orchestrator:
             log(logger, "warning", "orchestrator app error", error=exc.message)
             yield ev("error", message=exc.message)
             final_text = f"I hit a problem: {exc.message}"
+        except asyncio.CancelledError:
+            # Client disconnected / pressed Stop — persist the partial reply.
+            if streamed_text or tool_events:
+                self.db.add(Message(
+                    id=new_id(), conversation_id=conversation.id, user_id=user.id,
+                    role="assistant", content=streamed_text or "*(stopped)*", created_at=utcnow(),
+                    meta={
+                        "mode": "ai" if ai_mode else "local",
+                        "execution_id": execution_id,
+                        "aborted": True,
+                        "tools": [{"id": t["tool"], "success": t["success"], "summary": t["summary"]}
+                                  for t in tool_events],
+                    },
+                ))
+                conversation.updated_at = utcnow()
+                self.db.commit()
+            raise
 
         if not text_streamed and final_text:
+            _track_delta(final_text)
             yield ev("delta", text=final_text)
 
         # 4) persist assistant message with execution summary
@@ -238,12 +265,18 @@ class Orchestrator:
             tool_registry.describe(t, ToolContext(db=self.db, user=user, user_settings=user_settings))
             for t in tool_registry.all()
         ]
-        system = build_system_prompt(tools_description(available), context_block)
+        system = build_system_prompt(
+            tools_description(available), context_block,
+            assistant_name=getattr(user_settings, "assistant_name", "MANISK") or "MANISK",
+            response_style=getattr(user_settings, "response_style", "balanced"),
+        )
         history = recent_messages(self.db, conversation.id, limit=12)
         messages: list[dict] = [{"role": "system", "content": system}]
-        for m in history[:-1]:  # last message is the current user message (already appended)
+        for m in history[:-1]:  # prior turns (the last row is the current user message)
             if m.role in ("user", "assistant"):
                 messages.append({"role": m.role, "content": m.content[:4000]})
+        # the current user message — the model MUST see what was just asked
+        messages.append({"role": "user", "content": text[:8000]})
 
         for iteration in range(MAX_PLAN_ITERATIONS):
             # streaming call with protocol detection
@@ -313,7 +346,8 @@ class Orchestrator:
                                         "summary": f"Unknown tool requested: {tool_id}"})
                     continue
                 tool = tool_registry.get(tool_id)
-                yield ev("tool_start", tool=tool_id, name=tool.name)
+                yield ev("tool_start", tool=tool_id, name=tool.name,
+                         label=label_for(tool), agent=agent_for(tool))
 
                 firewall = PermissionFirewall(self.db)
                 decision = firewall.check(
@@ -332,15 +366,19 @@ class Orchestrator:
                 if not decision.allowed:
                     tool_events.append({"tool": tool_id, "success": False,
                                         "summary": f"Blocked by permission firewall: {decision.reason}"})
-                    yield ev("tool_end", tool=tool_id, success=False, summary=f"Blocked: {decision.reason}")
+                    yield ev("tool_end", tool=tool_id, success=False,
+                             label=label_for(tool), agent=agent_for(tool),
+                             summary=f"Blocked: {decision.reason}")
                     continue
 
                 ctx = ToolContext(db=self.db, user=user, user_settings=user_settings,
                                   request_id=request_id, execution_id=execution_id_var.get())
                 result = await execute_tool(ctx, tool_id, params, request_id=request_id, ip=ip)
                 summary = summarize_tool_result(tool_id, result.to_json())
-                tool_events.append({"tool": tool_id, "success": result.success, "summary": summary})
+                tool_events.append({"tool": tool_id, "success": result.success, "summary": summary,
+                                    "verified": bool(result.output.get("verified", False))})
                 yield ev("tool_end", tool=tool_id, success=result.success, summary=summary,
+                         label=label_for(tool), agent=agent_for(tool), verified=result.output.get("verified", False),
                          output=_slim_output(tool_id, result.to_json().get("output", {})))
                 executed_any = True
 
@@ -411,11 +449,14 @@ class Orchestrator:
                 tool_events.append({"tool": tool_id, "success": False, "summary": f"Blocked: {decision.reason}"})
                 continue
 
-            yield ev("tool_start", tool=tool_id, name=tool.name)
+            yield ev("tool_start", tool=tool_id, name=tool.name,
+                     label=label_for(tool), agent=agent_for(tool))
             result = await execute_tool(ctx, tool_id, params, request_id=request_id, ip=ip)
             summary = summarize_tool_result(tool_id, result.to_json())
-            tool_events.append({"tool": tool_id, "success": result.success, "summary": summary})
+            tool_events.append({"tool": tool_id, "success": result.success, "summary": summary,
+                                    "verified": bool(result.output.get("verified", False))})
             yield ev("tool_end", tool=tool_id, success=result.success, summary=summary,
+                     label=label_for(tool), agent=agent_for(tool), verified=result.output.get("verified", False),
                      output=_slim_output(tool_id, result.to_json().get("output", {})))
             if result.success:
                 parts.append(f"✓ {summary}")

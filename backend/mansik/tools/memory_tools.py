@@ -70,7 +70,9 @@ class MemorySaveTool(Tool):
         )
         ctx.db.add(memory)
         ctx.db.flush()
-        return {"memory": _memory_json(memory)}
+        # verification: re-read the row from the database before claiming success
+        ctx.db.refresh(memory)
+        return {"memory": _memory_json(memory), "verified": True}
 
 
 class MemorySearchTool(Tool):

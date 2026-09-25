@@ -23,6 +23,12 @@ _local = threading.local()
 def _make_engine() -> Engine:
     settings = get_settings()
     url = settings.database_url
+    # Normalize provider-injected URLs for SQLAlchemy 2.x:
+    # Render/Heroku style `postgres://` (and bare `postgresql://`) → psycopg2.
+    if url.startswith("postgres://"):
+        url = "postgresql+psycopg2://" + url[len("postgres://"):]
+    elif url.startswith("postgresql://"):
+        url = "postgresql+psycopg2://" + url[len("postgresql://"):]
     connect_args = {}
     if url.startswith("sqlite"):
         connect_args["check_same_thread"] = False

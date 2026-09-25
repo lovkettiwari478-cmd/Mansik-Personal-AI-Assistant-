@@ -81,6 +81,9 @@ class UserSettings(Base):
     memory_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     timezone: Mapped[str] = mapped_column(String(64), default="UTC", nullable=False)
     theme: Mapped[str] = mapped_column(String(16), default="dark", nullable=False)
+    # personalization
+    assistant_name: Mapped[str] = mapped_column(String(40), default="MANISK", nullable=False)
+    response_style: Mapped[str] = mapped_column(String(16), default="balanced", nullable=False)  # concise|balanced|detailed
     # Emergency stop halts ALL tool execution and automations for the user.
     emergency_stop: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     emergency_stop_at: Mapped[datetime | None] = mapped_column(AwareDateTime(), nullable=True)

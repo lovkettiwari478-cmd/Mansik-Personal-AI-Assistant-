@@ -5,7 +5,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, StatusProvider, ToastProvider, useAuth } from "./state";
 import ChatPage from "./pages/Chat";
 import LoginPage from "./pages/Login";
-import DashboardPage from "./pages/Dashboard";
+import HomePage from "./pages/Home";
 import TasksPage from "./pages/Tasks";
 import CalendarPage from "./pages/Calendar";
 import MemoryPage from "./pages/Memory";
@@ -38,7 +38,7 @@ export default function App() {
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/chat" element={<Protected><ChatPage /></Protected>} />
-              <Route path="/" element={<Protected><DashboardPage /></Protected>} />
+              <Route path="/" element={<Protected><HomePage /></Protected>} />
               <Route path="/tasks" element={<Protected><TasksPage /></Protected>} />
               <Route path="/calendar" element={<Protected><CalendarPage /></Protected>} />
               <Route path="/memory" element={<Protected><MemoryPage /></Protected>} />

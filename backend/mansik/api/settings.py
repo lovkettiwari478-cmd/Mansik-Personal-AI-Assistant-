@@ -36,6 +36,8 @@ def get_settings_route(
         "theme": settings.theme,
         "memory_enabled": settings.memory_enabled,
         "emergency_stop": settings.emergency_stop,
+        "assistant_name": settings.assistant_name,
+        "response_style": settings.response_style,
         "preferences": settings.preferences,
     }
 
@@ -66,6 +68,12 @@ def patch_settings(
     if body.memory_enabled is not None:
         settings.memory_enabled = body.memory_enabled
         changed.append("memory_enabled")
+    if body.assistant_name is not None:
+        settings.assistant_name = body.assistant_name.strip()
+        changed.append("assistant_name")
+    if body.response_style is not None:
+        settings.response_style = body.response_style
+        changed.append("response_style")
         audit(db, event_type="memory_toggled", category="memory",
               action=f"Memory {'enabled' if body.memory_enabled else 'disabled'}",
               user_id=user.id, ip=_client_ip(request), request_id=request.state.request_id)
