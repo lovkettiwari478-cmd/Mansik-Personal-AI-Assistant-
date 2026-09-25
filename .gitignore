@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+*.db
+*.db-wal
+*.db-shm
+
+# Node
+node_modules/
+frontend/dist/
+*.local
+
+# Runtime data
+storage/
+*.log
+
+# Env — never commit secrets
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Runtime data (live server DB/files in this sandbox)
+runtime-data/
+*.tsbuildinfo
